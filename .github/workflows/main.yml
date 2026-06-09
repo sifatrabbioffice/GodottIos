@@ -2,11 +2,10 @@ name: 📱 Build Godot iOS Editor (Unsigned IPA)
 
 on:
   workflow_dispatch: # গিটহাব থেকে ম্যানুয়ালি রান করার জন্য
-  push:
 
 jobs:
   build-ios-editor:
-    runs-on: macos-14 # অ্যাপলের লেটেস্ট কমান্ড লাইন টুলস ব্যবহারের জন্য
+    runs-on: macos-15 # লেটেস্ট ম্যাক ওএস রানার, যাতে এক্সকোড ১৬ ডিফল্ট থাকে
 
     steps:
     # ১. পাইথন এবং বিল্ড এনভায়রনমেন্ট সেটআপ
@@ -15,31 +14,25 @@ jobs:
       with:
         python-version: '3.11'
 
-    # ২. Xcode 16.0 সেটআপ করা (যাতে Clang 16 এররটি আর না আসে)
-    - name: Select Xcode Version 16.0
-      run: |
-        sudo xcode-select -s /Applications/Xcode_16.0.app/Contents/Developer
-        xcodebuild -version
-
-    # ৩. গডোটের আসল বিল্ডツール SCons ইনস্টল
+    # ২. গডোটের আসল বিল্ড টুল SCons ইনস্টল
     - name: Install SCons
       run: |
         python -m pip install scons
 
-    # ৪. গডোটের অফিশিয়াল ফুল সোর্স কোড ডাউনলোড (Latest Master)
+    # ৩. গডোটের অফিশিয়াল ফুল সোর্স কোড ডাউনলোড (Latest Master)
     - name: Clone Official Godot Source Code
       run: |
         git clone --depth 1 https://github.com/godotengine/godot.git
         cd godot
         git submodule update --init --recursive
 
-    # ৫. আইফোন ডিভাইসের জন্য গডোটের ফুল এডিটর (tools=yes) কমপাইল করা
+    # ৪. আইফোন ডিভাইসের জন্য গডোটের ফুল এডিটর (tools=yes) কমপাইল করা
     - name: Compile Godot Editor for iOS (ARM64)
       run: |
         cd godot
         scons platform=ios target=editor arch=arm64 tools=yes -j$(sysctl -n hw.logicalcpu)
 
-    # 🗜️ ৬. আনসাইনড (Unsigned) অ্যাপ স্ট্রাকচার ও .ipa তৈরি করা
+    # 🗜️ ৫. আনসাইনড (Unsigned) অ্যাপ স্ট্রাকচার ও .ipa তৈরি করা
     - name: Package into Unsigned .ipa
       run: |
         cd godot
@@ -76,7 +69,7 @@ jobs:
         
         zip -r Godot_iOS_Editor_Unsigned.ipa Payload/
 
-    # 📤 ৭. ফাইনাল আনসাইনড .ipa ফাইলটি গিটহাবে আপলোড করা
+    # 📤 ৬. ফাইনাল আনসাইনড .ipa ফাইলটি গিটহাবে আপলোড করা
     - name: Upload Final Unsigned IPA
       uses: actions/upload-artifact@v4
       with:
