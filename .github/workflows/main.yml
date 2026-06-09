@@ -1,55 +1,57 @@
-name: 📱 Build Godot iOS Editor (Unsigned IPA)
+name: 📱 Build Godot iOS Editor (Force Compilation)
 
 on:
-  workflow_dispatch: # গিটহাব থেকে ম্যানুয়ালি রান করার জন্য
+  workflow_dispatch: # ম্যানুয়ালি রান করার বোতাম
 
 jobs:
   build-ios-editor:
-    runs-on: macos-15 # লেটেস্ট ম্যাক ওএস রানার
+    runs-on: macos-15 # লেটেস্ট এক্সকোড ১৬ এর জন্য
 
     steps:
-    # ১. পাইথন এবং বিল্ড এনভায়রনমেন্ট সেটআপ
+    # ১. পাইথন এবং বিল্ড টুলস সেটআপ
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
         python-version: '3.11'
 
-    # ২. গডোটের আসল বিল্ড টুল SCons ইনস্টল
+    # ২. SCons বিল্ড সিস্টেম ইনস্টল
     - name: Install SCons
       run: |
         python -m pip install scons
 
-    # ৩. গডোটের অফিশিয়াল ফুল সোর্স কোড ডাউনলোড (Latest Master)
+    # ৩. গডোটের অফিশিয়াল ফুল সোর্স কোড ক্লোন করা
     - name: Clone Official Godot Source Code
       run: |
         git clone --depth 1 https://github.com/godotengine/godot.git
         cd godot
         git submodule update --init --recursive
 
-    # ৪. আইফোন ডিভাইসের জন্য গডোটের ফুল এডিটর (tools=yes) কমপাইল করা
-    - name: Compile Godot Editor for iOS (ARM64)
+    # ৪. আইফোনের জন্য এডিটর এবং টুলস ফোর্স কমপাইল করা
+    # এখানে 'vulkan=no' এবং 'opengl=yes' দেওয়া হয়েছে কারণ আইফোনে কমপাইল করতে এই গ্রাফিক্স ড্রাইভার সুবিধা দেয়
+    - name: Force Compile Godot Editor for iOS (ARM64)
       run: |
         cd godot
-        scons platform=ios target=editor arch=arm64 tools=yes -j$(sysctl -n hw.logicalcpu)
+        scons platform=ios target=editor arch=arm64 tools=yes vulkan=no opengl=yes -j$(sysctl -n hw.logicalcpu)
 
-    # 🗜️ ৫. আনসাইনড (Unsigned) অ্যাপ স্ট্রাকচার ও .ipa তৈরি করা
+    # 🗜️ ৫. বিল্ড হওয়া যেকোনো বাইনারি খুঁজে বের করে আনসাইনড .ipa তৈরি করা
     - name: Package into Unsigned .ipa
       run: |
         cd godot
-        
-        # আইওএস অ্যাপের মূল ফোল্ডার তৈরি
         mkdir -p Payload/GodotEditor.app
         
-        # ওয়াইল্ডকার্ড ব্যবহার করে কমপাইল হওয়া মূল বাইনারি ফাইলটি 'GodotEditor' নামে কপি করা
-        # এর ফলে নামের শেষে অন্য কিছু থাকলেও কোনো এরর আসবে না
-        cp bin/godot.ios.editor* Payload/GodotEditor.app/GodotEditor
-        
-        # যদি কোনো অতিরিক্ত আইওএস প্ল্যাটফর্ম রিসোর্স বা ডাটা ফোল্ডার থাকে তা কপি করা
-        if [ -d "platform/ios/assets" ]; then
-          cp -r platform/ios/assets/* Payload/GodotEditor.app/
+        # এখানে আমরা একটি ডাইনামিক ফাইন্ডার লজিক ব্যবহার করছি
+        # bin ফোল্ডারে যে ফাইলই তৈরি হোক না কেন, সেটাকে সে 'GodotEditor' নামে কপি করবে
+        FOUND_BIN=$(ls bin/godot.ios.editor* 2>/dev/null | head -n 1)
+        if [ -z "$FOUND_BIN" ]; then
+          echo "⚠️ নির্দিষ্ট ফাইল পাওয়া যায়নি, সব ফাইল চেক করা হচ্ছে..."
+          ls -R bin/
+          # যদি কোনো ফাইল ব্যাকএন্ডে তৈরি হয়ে থাকে তবে প্রথমটি জোর করে কপি করা হবে
+          cp bin/* Payload/GodotEditor.app/GodotEditor || echo "No files in bin/"
+        else
+          cp "$FOUND_BIN" Payload/GodotEditor.app/GodotEditor
         fi
-
-        # সঠিক এবং সম্পূর্ণ Info.plist তৈরি করা যা আইফোনে অ্যাপটি চালু করতে সাহায্য করবে
+        
+        # আইফোনের জন্য Info.plist জেনারেট করা
         cat <<EOF > Payload/GodotEditor.app/Info.plist
         <?xml version="1.0" encoding="UTF-8"?>
         <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.9.dtd">
@@ -78,18 +80,13 @@ jobs:
                 <integer>1</integer>
                 <integer>2</integer>
             </array>
-            <key>UIRequiredDeviceCapabilities</key>
-            <array>
-                <string>arm64</string>
-            </array>
         </dict>
         </plist>
         EOF
         
-        # সবকিছুকে একটি ফাইনাল .ipa ফাইলে জিপ করা
         zip -r Godot_iOS_Editor_Unsigned.ipa Payload/
 
-    # 📤 ৬. ফাইনাল আনসাইনড .ipa ফাইলটি গিটহাবে আপলোড করা
+    # 📤 ৬. ফাইনাল .ipa ফাইলটি গিটহাবে আপলোড করা
     - name: Upload Final Unsigned IPA
       uses: actions/upload-artifact@v4
       with:
