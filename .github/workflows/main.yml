@@ -2,6 +2,7 @@ name: 📱 Build Godot iOS Editor (Unsigned IPA)
 
 on:
   workflow_dispatch: # গিটহাব থেকে ম্যানুয়ালি রান করার জন্য
+  push:
 
 jobs:
   build-ios-editor:
@@ -14,38 +15,37 @@ jobs:
       with:
         python-version: '3.11'
 
-    # ২. গডোটের আসল বিল্ড টুল SCons ইনস্টল
+    # ২. Xcode 16.0 সেটআপ করা (যাতে Clang 16 এররটি আর না আসে)
+    - name: Select Xcode Version 16.0
+      run: |
+        sudo xcode-select -s /Applications/Xcode_16.0.app/Contents/Developer
+        xcodebuild -version
+
+    # ৩. গডোটের আসল বিল্ডツール SCons ইনস্টল
     - name: Install SCons
       run: |
         python -m pip install scons
 
-    # ৩. গডোটের অফিশিয়াল ফুল সোর্স কোড ডাউনলোড (Latest Master)
+    # ৪. গডোটের অফিশিয়াল ফুল সোর্স কোড ডাউনলোড (Latest Master)
     - name: Clone Official Godot Source Code
       run: |
         git clone --depth 1 https://github.com/godotengine/godot.git
         cd godot
         git submodule update --init --recursive
 
-    # ৪. আইফোন ডিভাইসের জন্য গডোটের ফুল এডিটর (tools=yes) কমপাইল করা
-    # এটি গডোটের ভেতরের C++ ইন্টারফেস ও ইউআই-কে আইফোনের আর্কিটেকচারে রূপান্তর করবে
+    # ৫. আইফোন ডিভাইসের জন্য গডোটের ফুল এডিটর (tools=yes) কমপাইল করা
     - name: Compile Godot Editor for iOS (ARM64)
       run: |
         cd godot
         scons platform=ios target=editor arch=arm64 tools=yes -j$(sysctl -n hw.logicalcpu)
 
-    # ৫. আনসাইনড (Unsigned) অ্যাপ স্ট্রাকচার ও .ipa তৈরি করা
-    # অ্যাপলের নিয়ম অনুযায়ী ডিরেক্ট জিপ করে .ipa বানানোর কমান্ড
-    - name: Package Package into Unsigned .ipa
+    # 🗜️ ৬. আনসাইনড (Unsigned) অ্যাপ স্ট্রাকচার ও .ipa তৈরি করা
+    - name: Package into Unsigned .ipa
       run: |
         cd godot
-        
-        # আইওএস অ্যাপের জন্য প্রয়োজনীয় ফোল্ডার স্ট্রাকচার (Payload) তৈরি
         mkdir -p Payload/GodotEditor.app
-        
-        # কমপাইল হওয়া বাইনারি ফাইলটি অ্যাপ ফোল্ডারে কপি করা
         cp bin/godot.ios.editor.arm64 Payload/GodotEditor.app/GodotEditor
         
-        # একটি ডামি Info.plist ফাইল তৈরি করা যা আইফোনে অ্যাপটি চেনার জন্য জরুরি
         cat <<EOF > Payload/GodotEditor.app/Info.plist
         <?xml version="1.0" encoding="UTF-8"?>
         <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.9.dtd">
@@ -74,10 +74,9 @@ jobs:
         </plist>
         EOF
         
-        # Payload ফোল্ডারটিকে জিপ করে .ipa ফরম্যাটে রূপান্তর করা
         zip -r Godot_iOS_Editor_Unsigned.ipa Payload/
 
-    # ৬. তৈরি হওয়া আনসাইনড .ipa ফাইলটি গিটহাবে আপলোড করা
+    # 📤 ৭. ফাইনাল আনসাইনড .ipa ফাইলটি গিটহাবে আপলোড করা
     - name: Upload Final Unsigned IPA
       uses: actions/upload-artifact@v4
       with:
