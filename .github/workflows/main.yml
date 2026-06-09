@@ -5,7 +5,7 @@ on:
 
 jobs:
   build-ios-editor:
-    runs-on: macos-15 # লেটেস্ট ম্যাক ওএস রানার, যাতে এক্সকোড ১৬ ডিফল্ট থাকে
+    runs-on: macos-15 # লেটেস্ট ম্যাক ওএস রানার
 
     steps:
     # ১. পাইথন এবং বিল্ড এনভায়রনমেন্ট সেটআপ
@@ -36,9 +36,20 @@ jobs:
     - name: Package into Unsigned .ipa
       run: |
         cd godot
-        mkdir -p Payload/GodotEditor.app
-        cp bin/godot.ios.editor.arm64 Payload/GodotEditor.app/GodotEditor
         
+        # আইওএস অ্যাপের মূল ফোল্ডার তৈরি
+        mkdir -p Payload/GodotEditor.app
+        
+        # ওয়াইল্ডকার্ড ব্যবহার করে কমপাইল হওয়া মূল বাইনারি ফাইলটি 'GodotEditor' নামে কপি করা
+        # এর ফলে নামের শেষে অন্য কিছু থাকলেও কোনো এরর আসবে না
+        cp bin/godot.ios.editor* Payload/GodotEditor.app/GodotEditor
+        
+        # যদি কোনো অতিরিক্ত আইওএস প্ল্যাটফর্ম রিসোর্স বা ডাটা ফোল্ডার থাকে তা কপি করা
+        if [ -d "platform/ios/assets" ]; then
+          cp -r platform/ios/assets/* Payload/GodotEditor.app/
+        fi
+
+        # সঠিক এবং সম্পূর্ণ Info.plist তৈরি করা যা আইফোনে অ্যাপটি চালু করতে সাহায্য করবে
         cat <<EOF > Payload/GodotEditor.app/Info.plist
         <?xml version="1.0" encoding="UTF-8"?>
         <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.9.dtd">
@@ -50,6 +61,10 @@ jobs:
             <string>org.godotengine.editor.ios</string>
             <key>CFBundleName</key>
             <string>GodotEditor</string>
+            <key>CFBundleDisplayName</key>
+            <string>Godot Editor</string>
+            <key>CFBundlePackageType</key>
+            <string>APPL</string>
             <key>CFBundleShortVersionString</key>
             <string>4.x</string>
             <key>CFBundleVersion</key>
@@ -63,10 +78,15 @@ jobs:
                 <integer>1</integer>
                 <integer>2</integer>
             </array>
+            <key>UIRequiredDeviceCapabilities</key>
+            <array>
+                <string>arm64</string>
+            </array>
         </dict>
         </plist>
         EOF
         
+        # সবকিছুকে একটি ফাইনাল .ipa ফাইলে জিপ করা
         zip -r Godot_iOS_Editor_Unsigned.ipa Payload/
 
     # 📤 ৬. ফাইনাল আনসাইনড .ipa ফাইলটি গিটহাবে আপলোড করা
