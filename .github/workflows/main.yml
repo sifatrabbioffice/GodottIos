@@ -2,6 +2,7 @@ name: 📱 Build Godot iOS Editor (Architecture & UI Fix)
 
 on:
   workflow_dispatch: # ম্যানুয়ালি রান করার জন্য
+  push:
 
 jobs:
   build-ios-editor:
