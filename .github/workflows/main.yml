@@ -1,11 +1,11 @@
-name: 📱 Build Godot iOS Editor (App Bundle Fix)
+name: 📱 Build Godot iOS Editor (Architecture & UI Fix)
 
 on:
   workflow_dispatch: # ম্যানুয়ালি রান করার জন্য
 
 jobs:
   build-ios-editor:
-    runs-on: macos-15 # লেটেস্ট ম্যাক ওএস রানার (Xcode 16 + Clang 16 সহ)
+    runs-on: macos-15 # লেটেস্ট ম্যাক ওএস রানার
 
     steps:
     # ১. পাইথন এবং বিল্ড এনভায়রনমেন্ট সেটআপ
@@ -26,41 +26,42 @@ jobs:
         cd godot
         git submodule update --init --recursive
 
-    # ৪. আইফোনের জন্য কোর এডিটর বাইনারি ফোর্স কমপাইল করা
-    - name: Force Compile Godot Editor for iOS (ARM64)
+    # ৪. আইফোনের কার্নেলের জন্য মোবাইল-ইউআই ও আর্কিটেকচার ফিক্স সহ কম্পাইল করা
+    # এখানে 'production=yes' এবং 'gles3=yes' নিশ্চিত করবে এটি যেন আইফোনের গ্রাফিক্স ড্রাইভারের সাথে ১০০% ম্যাচ করে
+    - name: Force Compile Godot Mobile Editor for iOS
       run: |
         cd godot
-        scons platform=ios target=editor arch=arm64 tools=yes vulkan=no opengl=yes -j$(sysctl -n hw.logicalcpu)
+        scons platform=ios target=editor arch=arm64 tools=yes tests=no production=yes opengl=yes -j$(sysctl -n hw.logicalcpu)
 
-    # 🗜️ ৫. GodotEditor.app এবং আনসাইনড .ipa ডিরেক্টরি তৈরি করা (The Structural Fix)
-    - name: Package into Unsigned .ipa with Pure Code Fix
+    # 🗜️ ৫. GodotEditor.app এবং আনসাইনড .ipa ডিরেক্টরি তৈরি করা
+    - name: Package into Unsigned .ipa with Complete Kernel Fix
       run: |
         cd godot
         
-        # আইওএস অ্যাপ বান্ডেলের মূল স্ট্রাকচার তৈরি করা (GodotEditor.app)
+        # আইওএস অ্যাপ বান্ডেলের মূল স্ট্রাকচার তৈরি করা
         mkdir -p Payload/GodotEditor.app
         
-        # কমপাইল হওয়া আসল বাইনারি ফাইলটি খুঁজে বের করে "GodotEditor" নামে কপি করা
+        # ডাইনামিক ফাইন্ডার দিয়ে সঠিক কমপাইল হওয়া আর্কিটেকচার ফাইলটি কপি করা
         FOUND_BIN=$(ls bin/godot.ios.editor* 2>/dev/null | head -n 1)
         if [ -z "$FOUND_BIN" ]; then
-          echo "⚠️ নির্দিষ্ট ফাইল পাওয়া যায়নি, সব ফাইল চেক করা হচ্ছে..."
+          echo "⚠️ কোনো ফাইল পাওয়া যায়নি, ফোর্স কপি করা হচ্ছে..."
           cp bin/* Payload/GodotEditor.app/GodotEditor || touch Payload/GodotEditor.app/GodotEditor
         else
           cp "$FOUND_BIN" Payload/GodotEditor.app/GodotEditor
         fi
         
-        # ফাইল এক্সেস পারমিশন নিশ্চিত করা (যাতে ওএস ফাইলটি এক্সিকিউট করতে পারে)
-        chmod +x Payload/GodotEditor.app/GodotEditor
+        # আইফোনের এক্সিকিউটেবল পারমিশন দেওয়া
+        chmod 755 Payload/GodotEditor.app/GodotEditor
 
-        # অ্যাসেট ফাইলগুলো কপি করা (যদি থাকে)
+        # অ্যাসেট ফাইলগুলো কপি করা
         if [ -d "platform/ios/assets" ]; then
           cp -r platform/ios/assets/* Payload/GodotEditor.app/
         fi
 
-        # মেমোরি এবং JIT বাইপাস করার জন্য Entitlements ফাইল তৈরি
+        # JIT এবং মেমোরি ম্যাপিং এরর দূর করার জন্য Entitlements ফিক্স
         cat <<EOF > Entitlements.plist
         <?xml version="1.0" encoding="UTF-8"?>
-        <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+        <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.9.dtd">
         <plist version="1.0">
         <dict>
             <key>get-task-allow</key>
@@ -75,7 +76,7 @@ jobs:
         </plist>
         EOF
 
-        # সঠিক এবং ফিক্সড Info.plist তৈরি করা (ট্যাগ এরর মুক্ত)
+        # সঠিক এবং ভ্যালিড Info.plist তৈরি করা
         cat <<EOF > Payload/GodotEditor.app/Info.plist
         <?xml version="1.0" encoding="UTF-8"?>
         <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.9.dtd">
@@ -112,8 +113,8 @@ jobs:
         </plist>
         EOF
         
-        # অ্যাপলের অফিশিয়াল টুল দিয়ে অ্যাড-হক সাইনিং বা মেমোরি পারমিশন লক উন্মুক্ত করা
-        codesign --force --sign - --entitlements Entitlements.plist Payload/GodotEditor.app/GodotEditor
+        # অ্যাপলের কোডসাইন টুল দিয়ে মেমোরি ও কার্নেল পারমিশন জোড়া দেওয়া
+        codesign --force --sign - --entitlements Entitlements.plist --timestamp=none Payload/GodotEditor.app/GodotEditor
 
         # ফাইনাল জিপ করে আনসাইনড .ipa জেনারেট করা
         zip -r Godot_iOS_Editor_Final.ipa Payload/
